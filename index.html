@@ -1,0 +1,31 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Flux — bassin circulaire</title><style>body{background:#101d2c;color:#e5eff8;font:15px system-ui,sans-serif;margin:0;padding:20px}main{max-width:550px;margin:auto}button{padding:10px 15px;border:1px solid #728aa1;border-radius:8px;background:#233d55;color:white;cursor:pointer}button:first-child{background:#225eae}label{display:block;margin:15px 0}input{width:100%}canvas{width:100%;aspect-ratio:1;border-radius:8px;background:#081827}#info{display:flex;justify-content:space-between;color:#b6c6d5;font-size:13px}</style></head><body><main><h2>Flux — bassin circulaire</h2><p>Prototype numérique 2D, non conservatif : les trajectoires ne sont pas une solution exacte des équations d’Euler.</p><div><button id="start">Déclencher</button> <button id="pause">Pause</button> <button id="reset">Effacer</button></div><label>Vitesse du jet : <b id="vl">0,5 m/s</b><input id="v" type="range" min=".1" max="1.5" step=".1" value=".5"></label><label>Durée du jet : <b id="dl">2,0 s</b><input id="d" type="range" min=".5" max="6" step=".5" value="2"></label><label>Persistance des trajectoires : <b id="pl">5 s</b><input id="persist" type="range" min="1" max="31" step="1" value="5"></label><canvas id="view" width="480" height="480"></canvas><div id="info"><span id="clock">Temps : 0,00 s</span><span id="count">0 particule</span></div><p id="status">Fluide au repos.</p></main><script>
+'use strict';
+const $=id=>document.getElementById(id),c=$('view'),g=c.getContext('2d');
+const N=48,L=N*N,h=1/N,dt=.012,idx=(i,j)=>i+j*N,clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const u=new Float64Array(L),v=new Float64Array(L),un=new Float64Array(L),vn=new Float64Array(L),p=new Float64Array(L),pn=new Float64Array(L),div=new Float64Array(L),mask=new Uint8Array(L);
+let particles=[],segments=[],t=0,running=false,paused=false,last=0,acc=0,spawn=0,seed=19;
+const rnd=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
+for(let j=0;j<N;j++)for(let i=0;i<N;i++){let x=(i+.5)/N-.5,y=(j+.5)/N-.5;mask[idx(i,j)]=x*x+y*y<.475**2?1:0}
+function inside(x,y){return (x-.5)**2+(y-.5)**2<.475**2}
+function sample(a,x,y){let xx=clamp(x*N-.5,0,N-1.001),yy=clamp(y*N-.5,0,N-1.001),i=Math.floor(xx),j=Math.floor(yy),fx=xx-i,fy=yy-j,s=0,w=0;for(let dj=0;dj<=1;dj++)for(let di=0;di<=1;di++){let k=idx(i+di,j+dj),w0=(di?fx:1-fx)*(dj?fy:1-fy);if(mask[k]){s+=w0*a[k];w+=w0}}return w?s/w:0}
+function solve(){
+const speed=+$('v').value,T=+$('d').value;
+for(let j=1;j<N-1;j++)for(let i=1;i<N-1;i++){let k=idx(i,j);if(!mask[k])continue;let x=(i+.5)/N,y=(j+.5)/N;un[k]=sample(u,x-u[k]*dt,y-v[k]*dt);vn[k]=sample(v,x-u[k]*dt,y-v[k]*dt)}
+u.set(un);v.set(vn);
+if(t<T)for(let j=1;j<N-1;j++)for(let i=1;i<N-1;i++){let k=idx(i,j);if(mask[k]&&(i+.5)/N<.095&&Math.abs((j+.5)/N-.5)<.026){u[k]=speed;v[k]=0}}
+for(let j=1;j<N-1;j++)for(let i=1;i<N-1;i++){let k=idx(i,j);if(!mask[k])continue;let R=mask[k+1]?u[k+1]:-u[k],A=mask[k-1]?u[k-1]:-u[k],B=mask[k+N]?v[k+N]:-v[k],D=mask[k-N]?v[k-N]:-v[k];div[k]=(R-A+B-D)*.5/h}
+p.fill(0);
+for(let z=0;z<65;z++){for(let j=1;j<N-1;j++)for(let i=1;i<N-1;i++){let k=idx(i,j);if(!mask[k])continue;let sum=0,n=0;for(const q of [k-1,k+1,k-N,k+N])if(mask[q]){sum+=p[q];n++}pn[k]=n?(sum-div[k]*h*h/dt)/n:0}p.set(pn)}
+for(let j=1;j<N-1;j++)for(let i=1;i<N-1;i++){let k=idx(i,j);if(!mask[k])continue;let px=(mask[k+1]?p[k+1]:p[k])-(mask[k-1]?p[k-1]:p[k]);let py=(mask[k+N]?p[k+N]:p[k])-(mask[k-N]?p[k-N]:p[k]);u[k]-=dt*px/(2*h);v[k]-=dt*py/(2*h);if(!mask[k-1]&&u[k]<0)u[k]=0;if(!mask[k+1]&&u[k]>0)u[k]=0;if(!mask[k-N]&&v[k]<0)v[k]=0;if(!mask[k+N]&&v[k]>0)v[k]=0}
+if(t<T){spawn+=Math.max(8,90*speed)*dt;while(spawn>=1){spawn--;particles.push({x:.067,y:.5+(rnd()-.5)*.035})}}
+const batch=[];for(const a of particles){let ox=a.x,oy=a.y,vx=sample(u,ox,oy),vy=sample(v,ox,oy),mx=ox+vx*dt*.5,my=oy+vy*dt*.5,nx=ox+sample(u,mx,my)*dt,ny=oy+sample(v,mx,my)*dt;if(inside(nx,ny)){a.x=nx;a.y=ny;if(Math.hypot(nx-ox,ny-oy)>1e-8)batch.push(ox*480,oy*480,nx*480,ny*480)}}
+t+=dt;if(batch.length)segments.push({t,data:batch});let persistence=+$('persist').value;if(persistence!==31)while(segments.length&&segments[0].t<=t-persistence)segments.shift();
+}
+function draw(){g.fillStyle='#081827';g.fillRect(0,0,480,480);g.beginPath();g.arc(240,240,228,0,Math.PI*2);g.fillStyle='#0d2940';g.fill();g.strokeStyle='#8cabbf';g.lineWidth=2;g.stroke();g.save();g.beginPath();g.arc(240,240,227,0,Math.PI*2);g.clip();g.strokeStyle='rgba(104,203,242,.53)';g.lineWidth=.8;g.beginPath();for(const batch of segments){const a=batch.data;for(let i=0;i<a.length;i+=4){g.moveTo(a[i],a[i+1]);g.lineTo(a[i+2],a[i+3])}}g.stroke();g.fillStyle='#ffbd6a';for(const a of particles){g.beginPath();g.arc(a.x*480,a.y*480,2,0,Math.PI*2);g.fill()}g.restore();g.fillStyle='#ff9c45';g.beginPath();g.arc(27,240,5,0,Math.PI*2);g.fill();$('clock').textContent='Temps : '+t.toFixed(2).replace('.',',')+' s';$('count').textContent=particles.length+' particules';$('status').textContent=!running?'Fluide au repos.':t<+$('d').value?'Injection en cours':'Jet arrêté — trajectoires résiduelles'}
+function frame(now){if(!last)last=now;let elapsed=Math.min(.06,(now-last)/1000);last=now;if(running&&!paused){acc+=elapsed;let n=0;while(acc>=dt&&n<5){solve();acc-=dt;n++}}draw();requestAnimationFrame(frame)}
+function reset(){u.fill(0);v.fill(0);un.fill(0);vn.fill(0);p.fill(0);pn.fill(0);particles=[];segments=[];t=0;acc=0;spawn=0;running=false;paused=false;seed=19;$('pause').textContent='Pause'}
+$('start').onclick=()=>{reset();running=true};$('reset').onclick=reset;$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Reprendre':'Pause'};
+for(const [id,out,suffix] of [['v','vl',' m/s'],['d','dl',' s']])$(id).oninput=()=>$(out).textContent=(+$(id).value).toFixed(1).replace('.',',')+suffix;
+$('persist').oninput=()=>{let q=+$('persist').value;$('pl').textContent=q===31?'∞ (permanente)':q+' s'};
+requestAnimationFrame(frame);
+</script></body></html>
