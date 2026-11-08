@@ -62,6 +62,10 @@
       <input id="angle" type="range" min="-90" max="90" step="5" value="0">
     </label>
     <label>
+      Épaisseur du premier tuyau : <b id="width1l">3,5 %</b>
+      <input id="width1" type="range" min="0" max="7" step=".5" value="3.5">
+    </label>
+    <label>
       Durée du jet : <b id="dl">2,0 s</b>
       <input id="d" type="range" min=".5" max="6" step=".5" value="2">
     </label>
@@ -73,6 +77,9 @@
       </label>
       <label>Angle relatif vers le centre : <b id="angle2l">0°</b>
         <input id="angle2" type="range" min="-90" max="90" step="5" value="0">
+      </label>
+      <label>Épaisseur du deuxième tuyau : <b id="width2l">3,5 %</b>
+        <input id="width2" type="range" min="0" max="7" step=".5" value="3.5">
       </label>
       <label>Vitesse du deuxième jet : <b id="v2l">0,5 m/s</b>
         <input id="v2" type="range" min=".1" max="1.5" step=".1" value=".5">
@@ -343,7 +350,7 @@
       if (t < T) {
         const duration = Math.min(dt, T - t);
         spawn = emit(Math.max(8, 90 * speed), duration, spawn, age => {
-          particles.push({ x: .067, y: .5 + (rnd() - .5) * .035, jet: 1, age });
+          particles.push({ x: .067, y: .5 + (rnd() - .5) * (+$('width1').value / 100), jet: 1, age });
         });
       }
 
@@ -351,7 +358,7 @@
         const b = nozzle2();
         const duration = Math.min(dt, +$('d2').value - t);
         spawn2 = emit(Math.max(8, 90 * +$('v2').value), duration, spawn2, age => {
-          const offset = (rnd() - .5) * .035;
+          const offset = (rnd() - .5) * (+$('width2').value / 100);
           particles.push({
             x: b.x - b.dy * offset,
             y: b.y + b.dx * offset,
@@ -593,6 +600,13 @@
     for (const [id, out] of [['pos2', 'pos2l'], ['angle2', 'angle2l']]) {
       $(id).oninput = () => {
         $(out).textContent = $(id).value + '°';
+        requestDraw();
+      };
+    }
+
+    for (const [id, out] of [['width1', 'width1l'], ['width2', 'width2l']]) {
+      $(id).oninput = () => {
+        $(out).textContent = (+$(id).value).toFixed(1).replace('.', ',') + ' %';
         requestDraw();
       };
     }
