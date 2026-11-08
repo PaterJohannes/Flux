@@ -142,7 +142,7 @@
     let t = 0;           // Temps simulé.
     let running = false;
     let paused = false;
-    let last = 0;        // Date de la dernière image affichée.
+    let last = null;     // Date de la dernière image en mode actif.
     let acc = 0;         // Temps réel accumulé pour les pas de calcul.
     let spawn = 0;
     let spawn2 = 0;       // Fraction de particule restant à injecter.
@@ -490,12 +490,20 @@
     // 6. HORLOGE D'ANIMATION
     // ============================================================
 
+    let frameId = null;
+
+    // Regroupe les demandes reçues avant le prochain rafraîchissement.
+    function requestDraw() {
+      if (frameId === null) frameId = requestAnimationFrame(frame);
+    }
+
     function frame(now) {
-      if (!last) last = now;
-      let elapsed = Math.min(.06, (now - last) / 1000);
-      last = now;
+      frameId = null;
 
       if (running && !paused) {
+        // La première image après démarrage ou reprise ne fait pas avancer le fluide.
+        const elapsed = last === null ? 0 : Math.min(.06, (now - last) / 1000);
+        last = now;
         acc += elapsed;
         let n = 0;
         while (acc >= dt && n < 5) {
@@ -506,7 +514,7 @@
       }
 
       draw();
-      requestAnimationFrame(frame); // Demande l'image suivante.
+      if (running && !paused) requestDraw();
     }
 
     // ============================================================
@@ -523,6 +531,7 @@
       particles = [];
       segments = [];
       t = 0;
+      last = null;
       acc = 0;
       spawn = 0;
       spawn2 = 0;
@@ -535,11 +544,17 @@
     $('start').onclick = () => {
       reset();
       running = true;
+      requestDraw();
     };
-    $('reset').onclick = reset;
+    $('reset').onclick = () => {
+      reset();
+      requestDraw();
+    };
     $('pause').onclick = () => {
       paused = !paused;
+      last = null;
       $('pause').textContent = paused ? 'Reprendre' : 'Pause';
+      requestDraw();
     };
 
     // Mise à jour des valeurs affichées quand on déplace les curseurs.
@@ -552,24 +567,31 @@
       $(id).oninput = () => {
         $(out).textContent =
           (+$(id).value).toFixed(1).replace('.', ',') + suffix;
+        if (id === 'd' || id === 'd2') requestDraw();
       };
     }
 
     $('angle').oninput = () => {
       $('al').textContent = $('angle').value + '°';
+      requestDraw();
     };
 
     for (const [id, out] of [['pos2', 'pos2l'], ['angle2', 'angle2l']]) {
-      $(id).oninput = () => { $(out).textContent = $(id).value + '°'; };
+      $(id).oninput = () => {
+        $(out).textContent = $(id).value + '°';
+        requestDraw();
+      };
     }
+
+    $('enable2').onchange = requestDraw;
 
     $('persist').oninput = () => {
       let q = +$('persist').value;
       $('pl').textContent = q === 31 ? '∞ (permanente)' : q + ' s';
     };
 
-    // Démarre la boucle d'affichage, même avant l'injection.
-    requestAnimationFrame(frame);
+    // Affiche le bassin au repos une seule fois.
+    requestDraw();
   </script>
 </body>
 </html>
