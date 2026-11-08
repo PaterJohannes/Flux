@@ -58,6 +58,10 @@
       <input id="v" type="range" min=".1" max="1.5" step=".1" value=".5">
     </label>
     <label>
+      Angle du jet : <b id="al">0°</b>
+      <input id="angle" type="range" min="-90" max="90" step="5" value="0">
+    </label>
+    <label>
       Durée du jet : <b id="dl">2,0 s</b>
       <input id="d" type="range" min=".5" max="6" step=".5" value="2">
     </label>
@@ -182,6 +186,9 @@
     function solve() {
       const speed = +$('v').value;  // Vitesse choisie sur le curseur.
       const T = +$('d').value;      // Durée d'injection choisie.
+      const angle = +$('angle').value * Math.PI / 180;
+      const jetX = speed * Math.cos(angle);
+      const jetY = -speed * Math.sin(angle); // Axe vertical de l'écran orienté vers le bas.
 
       // 4.1 Advection semi-lagrangienne :
       // recherche en arrière la vitesse transportée vers chaque cellule.
@@ -199,15 +206,15 @@
       u.set(un);
       v.set(vn);
 
-      // 4.2 Jet horizontal imposé près du bord gauche.
+      // 4.2 Jet orientable imposé près du bord gauche.
       if (t < T) {
         for (let j = 1; j < N - 1; j++) {
           for (let i = 1; i < N - 1; i++) {
             let k = idx(i, j);
             if (mask[k] && (i + .5) / N < .095 &&
                 Math.abs((j + .5) / N - .5) < .026) {
-              u[k] = speed;
-              v[k] = 0;
+              u[k] = jetX;
+              v[k] = jetY;
             }
           }
         }
@@ -369,6 +376,20 @@
       g.beginPath();
       g.arc(27, 240, 5, 0, Math.PI * 2);
       g.fill();
+      // Flèche indiquant la direction choisie du jet.
+      const theta = +$('angle').value * Math.PI / 180;
+      const ax = 27 + 24 * Math.cos(theta);
+      const ay = 240 - 24 * Math.sin(theta);
+      g.strokeStyle = '#ff9c45';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(27, 240);
+      g.lineTo(ax, ay);
+      g.moveTo(ax, ay);
+      g.lineTo(ax - 7 * Math.cos(theta - .5), ay + 7 * Math.sin(theta - .5));
+      g.moveTo(ax, ay);
+      g.lineTo(ax - 7 * Math.cos(theta + .5), ay + 7 * Math.sin(theta + .5));
+      g.stroke();
 
       // Indications textuelles sous le bassin.
       $('clock').textContent = 'Temps : ' + t.toFixed(2).replace('.', ',') + ' s';
@@ -445,6 +466,10 @@
           (+$(id).value).toFixed(1).replace('.', ',') + suffix;
       };
     }
+
+    $('angle').oninput = () => {
+      $('al').textContent = $('angle').value + '°';
+    };
 
     $('persist').oninput = () => {
       let q = +$('persist').value;
