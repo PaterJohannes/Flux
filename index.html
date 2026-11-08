@@ -65,6 +65,22 @@
       Durée du jet : <b id="dl">2,0 s</b>
       <input id="d" type="range" min=".5" max="6" step=".5" value="2">
     </label>
+    <fieldset style="border:1px solid #52758c;border-radius:8px;margin:18px 0;padding:12px">
+      <legend>Deuxième jet (cyan)</legend>
+      <label><input id="enable2" type="checkbox" checked style="width:auto"> Activer le deuxième jet</label>
+      <label>Position sur le cercle : <b id="pos2l">180°</b>
+        <input id="pos2" type="range" min="0" max="360" step="5" value="180">
+      </label>
+      <label>Angle relatif vers le centre : <b id="angle2l">0°</b>
+        <input id="angle2" type="range" min="-90" max="90" step="5" value="0">
+      </label>
+      <label>Vitesse du deuxième jet : <b id="v2l">0,5 m/s</b>
+        <input id="v2" type="range" min=".1" max="1.5" step=".1" value=".5">
+      </label>
+      <label>Durée du deuxième jet : <b id="d2l">2,0 s</b>
+        <input id="d2" type="range" min=".5" max="6" step=".5" value="2">
+      </label>
+    </fieldset>
     <label>
       Persistance des trajectoires : <b id="pl">5 s</b>
       <input id="persist" type="range" min="1" max="31" step="1" value="5">
@@ -128,7 +144,8 @@
     let paused = false;
     let last = 0;        // Date de la dernière image affichée.
     let acc = 0;         // Temps réel accumulé pour les pas de calcul.
-    let spawn = 0;       // Fraction de particule restant à injecter.
+    let spawn = 0;
+    let spawn2 = 0;       // Fraction de particule restant à injecter.
     let seed = 19;       // Graine du générateur pseudo-aléatoire.
 
     // Générateur déterministe : mêmes conditions, même semis initial.
@@ -179,6 +196,19 @@
       return w ? s / w : 0;
     }
 
+    // Deuxième buse : 0° à gauche, 90° en haut, 180° à droite.
+    // L'angle relatif nul dirige le jet vers le centre.
+    function nozzle2() {
+      const phi = +$('pos2').value * Math.PI / 180;
+      const theta = ( +$('pos2').value + +$('angle2').value ) * Math.PI / 180;
+      return {
+        x: .5 - .433 * Math.cos(phi),
+        y: .5 - .433 * Math.sin(phi),
+        dx: Math.cos(theta),
+        dy: -Math.sin(theta)
+      };
+    }
+
     // ============================================================
     // 4. UN PAS DE SIMULATION DU FLUIDE
     // ============================================================
@@ -215,6 +245,23 @@
                 Math.abs((j + .5) / N - .5) < .026) {
               u[k] = jetX;
               v[k] = jetY;
+            }
+          }
+        }
+      }
+
+      // Deuxième jet : petite zone d'injection à proximité de sa buse.
+      if ($('enable2').checked && t < +$('d2').value) {
+        const b = nozzle2();
+        const speed2 = +$('v2').value;
+        for (let j = 1; j < N - 1; j++) {
+          for (let i = 1; i < N - 1; i++) {
+            const k = idx(i, j);
+            const dx = (i + .5) / N - b.x;
+            const dy = (j + .5) / N - b.y;
+            if (mask[k] && dx * dx + dy * dy < .034 ** 2) {
+              u[k] = speed2 * b.dx;
+              v[k] = speed2 * b.dy;
             }
           }
         }
@@ -285,13 +332,28 @@
         spawn += Math.max(8, 90 * speed) * dt;
         while (spawn >= 1) {
           spawn--;
-          particles.push({ x: .067, y: .5 + (rnd() - .5) * .035 });
+          particles.push({ x: .067, y: .5 + (rnd() - .5) * .035, jet: 1 });
+        }
+      }
+
+      if ($('enable2').checked && t < +$('d2').value) {
+        const b = nozzle2();
+        spawn2 += Math.max(8, 90 * +$('v2').value) * dt;
+        while (spawn2 >= 1) {
+          spawn2--;
+          const offset = (rnd() - .5) * .035;
+          particles.push({
+            x: b.x - b.dy * offset,
+            y: b.y + b.dx * offset,
+            jet: 2
+          });
         }
       }
 
       // 4.7 Transport des particules dans le champ de vitesse.
       // Le point milieu améliore l'intégration des trajectoires.
       const batch = [];
+      const batch2 = [];
       for (const a of particles) {
         let ox = a.x;
         let oy = a.y;
@@ -306,7 +368,7 @@
           a.x = nx;
           a.y = ny;
           if (Math.hypot(nx - ox, ny - oy) > 1e-8) {
-            batch.push(ox * 480, oy * 480, nx * 480, ny * 480);
+            (a.jet === 2 ? batch2 : batch).push(ox * 480, oy * 480, nx * 480, ny * 480);
           }
         }
       }
@@ -314,7 +376,8 @@
       // 4.8 Enregistrement des nouveaux segments et expiration
       // des segments anciens. La valeur 31 signifie « permanent ».
       t += dt;
-      if (batch.length) segments.push({ t, data: batch });
+      if (batch.length) segments.push({ t, data: batch, jet: 1 });
+      if (batch2.length) segments.push({ t, data: batch2, jet: 2 });
 
       let persistence = +$('persist').value;
       if (persistence !== 31) {
@@ -350,21 +413,21 @@
 
       // Traces lumineuses : chaque groupe contient des segments
       // sous la forme [x1, y1, x2, y2, ...].
-      g.strokeStyle = 'rgba(104,203,242,.53)';
       g.lineWidth = .8;
-      g.beginPath();
       for (const batch of segments) {
+        g.strokeStyle = batch.jet === 2 ? 'rgba(115,255,205,.58)' : 'rgba(104,203,242,.53)';
+        g.beginPath();
         const a = batch.data;
         for (let i = 0; i < a.length; i += 4) {
           g.moveTo(a[i], a[i + 1]);
           g.lineTo(a[i + 2], a[i + 3]);
         }
+        g.stroke();
       }
-      g.stroke();
 
       // Petits points orange : positions actuelles des particules.
-      g.fillStyle = '#ffbd6a';
       for (const a of particles) {
+        g.fillStyle = a.jet === 2 ? '#80ffd4' : '#ffbd6a';
         g.beginPath();
         g.arc(a.x * 480, a.y * 480, 2, 0, Math.PI * 2);
         g.fill();
@@ -391,12 +454,34 @@
       g.lineTo(ax - 7 * Math.cos(theta + .5), ay + 7 * Math.sin(theta + .5));
       g.stroke();
 
+      // Deuxième buse et flèche d'orientation.
+      if ($('enable2').checked) {
+        const b = nozzle2();
+        const bx = b.x * 480, by = b.y * 480;
+        g.fillStyle = '#80ffd4';
+        g.beginPath();
+        g.arc(bx, by, 5, 0, Math.PI * 2);
+        g.fill();
+        const ex = bx + 24 * b.dx, ey = by + 24 * b.dy;
+        const a = Math.atan2(b.dy, b.dx);
+        g.strokeStyle = '#80ffd4';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(bx, by);
+        g.lineTo(ex, ey);
+        g.moveTo(ex, ey);
+        g.lineTo(ex - 7 * Math.cos(a - .5), ey - 7 * Math.sin(a - .5));
+        g.moveTo(ex, ey);
+        g.lineTo(ex - 7 * Math.cos(a + .5), ey - 7 * Math.sin(a + .5));
+        g.stroke();
+      }
+
       // Indications textuelles sous le bassin.
       $('clock').textContent = 'Temps : ' + t.toFixed(2).replace('.', ',') + ' s';
       $('count').textContent = particles.length + ' particules';
       $('status').textContent = !running
         ? 'Fluide au repos.'
-        : t < +$('d').value
+        : t < +$('d').value || ($('enable2').checked && t < +$('d2').value)
           ? 'Injection en cours'
           : 'Jet arrêté — trajectoires résiduelles';
     }
@@ -440,6 +525,7 @@
       t = 0;
       acc = 0;
       spawn = 0;
+      spawn2 = 0;
       running = false;
       paused = false;
       seed = 19;
@@ -459,7 +545,9 @@
     // Mise à jour des valeurs affichées quand on déplace les curseurs.
     for (const [id, out, suffix] of [
       ['v', 'vl', ' m/s'],
-      ['d', 'dl', ' s']
+      ['d', 'dl', ' s'],
+      ['v2', 'v2l', ' m/s'],
+      ['d2', 'd2l', ' s']
     ]) {
       $(id).oninput = () => {
         $(out).textContent =
@@ -470,6 +558,10 @@
     $('angle').oninput = () => {
       $('al').textContent = $('angle').value + '°';
     };
+
+    for (const [id, out] of [['pos2', 'pos2l'], ['angle2', 'angle2l']]) {
+      $(id).oninput = () => { $(out).textContent = $(id).value + '°'; };
+    }
 
     $('persist').oninput = () => {
       let q = +$('persist').value;
