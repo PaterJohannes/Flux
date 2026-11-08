@@ -327,42 +327,56 @@
         }
       }
 
-      // 4.6 Injection de marqueurs visuels dans le jet.
-      if (t < T) {
-        spawn += Math.max(8, 90 * speed) * dt;
-        while (spawn >= 1) {
-          spawn--;
-          particles.push({ x: .067, y: .5 + (rnd() - .5) * .035, jet: 1 });
+      // 4.6 Émission à intervalles temporels réguliers (temps simulé).
+      // L'instant exact de naissance est conservé à l'intérieur du pas dt.
+      // Un changement de débit conserve la fraction du cycle déjà écoulée.
+      function emit(rate, duration, phase, create) {
+        const interval = 1 / rate;
+        let elapsed = (1 - phase) * interval;
+        while (elapsed <= duration + 1e-12) {
+          create(dt - elapsed);
+          elapsed += interval;
         }
+        return (phase + rate * duration) % 1;
+      }
+
+      if (t < T) {
+        const duration = Math.min(dt, T - t);
+        spawn = emit(Math.max(8, 90 * speed), duration, spawn, age => {
+          particles.push({ x: .067, y: .5 + (rnd() - .5) * .035, jet: 1, age });
+        });
       }
 
       if ($('enable2').checked && t < +$('d2').value) {
         const b = nozzle2();
-        spawn2 += Math.max(8, 90 * +$('v2').value) * dt;
-        while (spawn2 >= 1) {
-          spawn2--;
+        const duration = Math.min(dt, +$('d2').value - t);
+        spawn2 = emit(Math.max(8, 90 * +$('v2').value), duration, spawn2, age => {
           const offset = (rnd() - .5) * .035;
           particles.push({
             x: b.x - b.dy * offset,
             y: b.y + b.dx * offset,
-            jet: 2
+            jet: 2,
+            age
           });
-        }
+        });
       }
 
-      // 4.7 Transport des particules dans le champ de vitesse.
-      // Le point milieu améliore l'intégration des trajectoires.
+      // 4.7 Transport : une particule nouvellement créée ne parcourt
+      // que la fraction de dt postérieure à son instant de naissance.
       const batch = [];
       const batch2 = [];
       for (const a of particles) {
+        const travel = a.age === undefined ? dt : a.age;
+        delete a.age;
+        if (travel <= 0) continue;
         let ox = a.x;
         let oy = a.y;
         let vx = sample(u, ox, oy);
         let vy = sample(v, ox, oy);
-        let mx = ox + vx * dt * .5;
-        let my = oy + vy * dt * .5;
-        let nx = ox + sample(u, mx, my) * dt;
-        let ny = oy + sample(v, mx, my) * dt;
+        let mx = ox + vx * travel * .5;
+        let my = oy + vy * travel * .5;
+        let nx = ox + sample(u, mx, my) * travel;
+        let ny = oy + sample(v, mx, my) * travel;
 
         if (inside(nx, ny)) {
           a.x = nx;
