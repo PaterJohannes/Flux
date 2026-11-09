@@ -349,7 +349,7 @@
 
       if (t < T) {
         const duration = Math.min(dt, T - t);
-        spawn = emit(Math.max(8, 90 * speed), duration, spawn, age => {
+        spawn = emit(5 * Math.max(8, 90 * speed), duration, spawn, age => {
           particles.push({ x: .067, y: .5 + (rnd() - .5) * (+$('width1').value / 100), jet: 1, age });
         });
       }
@@ -357,7 +357,7 @@
       if ($('enable2').checked && t < +$('d2').value) {
         const b = nozzle2();
         const duration = Math.min(dt, +$('d2').value - t);
-        spawn2 = emit(Math.max(8, 90 * +$('v2').value), duration, spawn2, age => {
+        spawn2 = emit(5 * Math.max(8, 90 * +$('v2').value), duration, spawn2, age => {
           const offset = (rnd() - .5) * (+$('width2').value / 100);
           particles.push({
             x: b.x - b.dy * offset,
