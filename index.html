@@ -465,7 +465,7 @@
 
       // Positions actuelles des particules : rouge pour le premier jet, vert sombre pour le second.
       for (const a of particles) {
-        g.fillStyle = a.jet === 2 ? '#146b3a' : '#ff3b30';
+        g.fillStyle = a.jet === 2 ? '#146b3a' : '#ff0000';
         g.beginPath();
         g.arc(a.x * 480, a.y * 480, 2, 0, Math.PI * 2);
         g.fill();
