@@ -146,6 +146,24 @@
 
     let particles = [];  // Positions actuelles des particules visibles.
     let segments = [];   // Segments des trajectoires, avec leur date.
+    // Image des traces permanentes : taille fixe, indépendante du temps écoulé.
+    const trails = document.createElement('canvas');
+    trails.width = c.width;
+    trails.height = c.height;
+    const tg = trails.getContext('2d');
+    let permanent = +$('persist').value === 31;
+
+    function paintBatch(ctx, batch) {
+      ctx.lineWidth = .8;
+      ctx.strokeStyle = batch.jet === 2 ? 'rgba(115,255,205,.58)' : 'rgba(104,203,242,.53)';
+      ctx.beginPath();
+      const a = batch.data;
+      for (let i = 0; i < a.length; i += 4) {
+        ctx.moveTo(a[i], a[i + 1]);
+        ctx.lineTo(a[i + 2], a[i + 3]);
+      }
+      ctx.stroke();
+    }
     let t = 0;           // Temps simulé.
     let running = false;
     let paused = false;
@@ -397,14 +415,22 @@
       // 4.8 Enregistrement des nouveaux segments et expiration
       // des segments anciens. La valeur 31 signifie « permanent ».
       t += dt;
-      if (batch.length) segments.push({ t, data: batch, jet: 1 });
-      if (batch2.length) segments.push({ t, data: batch2, jet: 2 });
+      if (batch.length) {
+        const item = { t, data: batch, jet: 1 };
+        segments.push(item);
+        if (permanent) paintBatch(tg, item);
+      }
+      if (batch2.length) {
+        const item = { t, data: batch2, jet: 2 };
+        segments.push(item);
+        if (permanent) paintBatch(tg, item);
+      }
 
       let persistence = +$('persist').value;
-      if (persistence !== 31) {
-        while (segments.length && segments[0].t <= t - persistence) {
-          segments.shift();
-        }
+      // Conserver au plus 30 s de données pour permettre de quitter le mode infini.
+      const cutoff = t - (permanent ? 30 : persistence);
+      while (segments.length && segments[0].t <= cutoff) {
+        segments.shift();
       }
     }
 
@@ -434,17 +460,8 @@
 
       // Traces lumineuses : chaque groupe contient des segments
       // sous la forme [x1, y1, x2, y2, ...].
-      g.lineWidth = .8;
-      for (const batch of segments) {
-        g.strokeStyle = batch.jet === 2 ? 'rgba(115,255,205,.58)' : 'rgba(104,203,242,.53)';
-        g.beginPath();
-        const a = batch.data;
-        for (let i = 0; i < a.length; i += 4) {
-          g.moveTo(a[i], a[i + 1]);
-          g.lineTo(a[i + 2], a[i + 3]);
-        }
-        g.stroke();
-      }
+      if (permanent) g.drawImage(trails, 0, 0);
+      else for (const batch of segments) paintBatch(g, batch);
 
       // Petits points orange : positions actuelles des particules.
       for (const a of particles) {
@@ -551,6 +568,7 @@
       pn.fill(0);
       particles = [];
       segments = [];
+      tg.clearRect(0, 0, trails.width, trails.height);
       t = 0;
       last = null;
       acc = 0;
@@ -616,6 +634,19 @@
     $('persist').oninput = () => {
       let q = +$('persist').value;
       $('pl').textContent = q === 31 ? '∞ (permanente)' : q + ' s';
+      if (permanent !== (q === 31)) {
+        permanent = q === 31;
+        if (permanent) {
+          tg.clearRect(0, 0, trails.width, trails.height);
+          for (const batch of segments) paintBatch(tg, batch);
+        } else {
+          tg.clearRect(0, 0, trails.width, trails.height);
+        }
+      }
+      if (!permanent) {
+        while (segments.length && segments[0].t <= t - q) segments.shift();
+      }
+      requestDraw();
     };
 
     // Affiche le bassin au repos une seule fois.
