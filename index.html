@@ -90,7 +90,7 @@
     </fieldset>
     <label>
       Persistance des trajectoires : <b id="pl">5 s</b>
-      <input id="persist" type="range" min="1" max="31" step="1" value="5">
+      <input id="persist" type="range" min="0" max="31" step="1" value="5">
     </label>
 
     <!-- Surface de dessin : 480 × 480 pixels -->
@@ -415,12 +415,12 @@
       // 4.8 Enregistrement des nouveaux segments et expiration
       // des segments anciens. La valeur 31 signifie « permanent ».
       t += dt;
-      if (batch.length) {
+      if (+$('persist').value > 0 && batch.length) {
         const item = { t, data: batch, jet: 1 };
         segments.push(item);
         if (permanent) paintBatch(tg, item);
       }
-      if (batch2.length) {
+      if (+$('persist').value > 0 && batch2.length) {
         const item = { t, data: batch2, jet: 2 };
         segments.push(item);
         if (permanent) paintBatch(tg, item);
