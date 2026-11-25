@@ -244,6 +244,10 @@
       const angle = +$('angle').value * Math.PI / 180;
       const jetX = speed * Math.cos(angle);
       const jetY = -speed * Math.sin(angle); // Axe vertical de l'écran orienté vers le bas.
+      const diameter1 = +$('width1').value / 100;
+      const radius1 = diameter1 / 2;
+      const diameter2 = +$('width2').value / 100;
+      const radius2 = diameter2 / 2;
 
       // 4.1 Advection semi-lagrangienne :
       // recherche en arrière la vitesse transportée vers chaque cellule.
@@ -262,12 +266,12 @@
       v.set(vn);
 
       // 4.2 Jet orientable imposé près du bord gauche.
-      if (t < T) {
+      if (diameter1 > 0 && t < T) {
         for (let j = 1; j < N - 1; j++) {
           for (let i = 1; i < N - 1; i++) {
             let k = idx(i, j);
             if (mask[k] && (i + .5) / N < .095 &&
-                Math.abs((j + .5) / N - .5) < .026) {
+                Math.abs((j + .5) / N - .5) < radius1) {
               u[k] = jetX;
               v[k] = jetY;
             }
@@ -276,7 +280,7 @@
       }
 
       // Deuxième jet : petite zone d'injection à proximité de sa buse.
-      if ($('enable2').checked && t < +$('d2').value) {
+      if ($('enable2').checked && diameter2 > 0 && t < +$('d2').value) {
         const b = nozzle2();
         const speed2 = +$('v2').value;
         for (let j = 1; j < N - 1; j++) {
@@ -284,7 +288,7 @@
             const k = idx(i, j);
             const dx = (i + .5) / N - b.x;
             const dy = (j + .5) / N - b.y;
-            if (mask[k] && dx * dx + dy * dy < .034 ** 2) {
+            if (mask[k] && dx * dx + dy * dy < radius2 * radius2) {
               u[k] = speed2 * b.dx;
               v[k] = speed2 * b.dy;
             }
@@ -365,18 +369,18 @@
         return (phase + rate * duration) % 1;
       }
 
-      if (t < T) {
+      if (diameter1 > 0 && t < T) {
         const duration = Math.min(dt, T - t);
         spawn = emit(5 * Math.max(8, 90 * speed), duration, spawn, age => {
-          particles.push({ x: .067, y: .5 + (rnd() - .5) * (+$('width1').value / 100), jet: 1, age });
+          particles.push({ x: .067, y: .5 + (rnd() - .5) * diameter1, jet: 1, age });
         });
       }
 
-      if ($('enable2').checked && t < +$('d2').value) {
+      if ($('enable2').checked && diameter2 > 0 && t < +$('d2').value) {
         const b = nozzle2();
         const duration = Math.min(dt, +$('d2').value - t);
         spawn2 = emit(5 * Math.max(8, 90 * +$('v2').value), duration, spawn2, age => {
-          const offset = (rnd() - .5) * (+$('width2').value / 100);
+          const offset = (rnd() - .5) * diameter2;
           particles.push({
             x: b.x - b.dy * offset,
             y: b.y + b.dx * offset,
